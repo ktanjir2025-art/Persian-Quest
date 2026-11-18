@@ -1,0 +1,68 @@
+name: Build Persian Quest APK
+
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - "*.zip"
+      - ".github/workflows/**"
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Setup Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 17
+
+      - name: Setup Android
+        uses: android-actions/setup-android@v3
+
+      - name: Extract project
+        run: |
+          ZIP=$(ls -S *.zip | head -n 1)
+          unzip -q "$ZIP" -d extracted
+          PKG=$(find extracted -name package.json | head -n 1)
+          APP_DIR=$(dirname "$PKG")
+          echo "APP_DIR=$APP_DIR" >> $GITHUB_ENV
+
+      - name: Install dependencies
+        run: |
+          cd "$APP_DIR"
+          npm install
+          npm install @capacitor/core@7 @capacitor/cli@7 @capacitor/android@7
+
+      - name: Build web app
+        run: |
+          cd "$APP_DIR"
+          npm run build
+
+      - name: Prepare Android
+        run: |
+          cd "$APP_DIR"
+          echo '{"appId":"com.persianquest.game","appName":"Persian Quest","webDir":"dist"}' > capacitor.config.json
+          npx cap add android
+          npx cap sync android
+
+      - name: Build APK
+        run: |
+          cd "$APP_DIR/android"
+          chmod +x gradlew
+          ./gradlew assembleDebug
+
+      - name: Upload APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: Persian-Quest-APK
+          path: ${{ env.APP_DIR }}/android/app/build/outputs/apk/debug/app-debug.apk
